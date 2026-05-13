@@ -760,22 +760,56 @@
             }
         }
 
-        createBlock(0, 0, -5, 12); createBlock(3, 0, -3, 18);
-        createBlock(0, 1.5, -15, 14); createBlock(15, 1.5, 0, 15); createBlock(0, 1.5, 15, 16); createBlock(-15, 1.5, 0, 17);
+        // --- DISPOSIZIONE NELLO SPAZIO (MAPPA) ---
+        // Punto di spawn: x:0, z:5
+        
+        // Elementi Centrali (Piazza)
+        createBlock(0, 0, -2, 12); // Computer Exchange
+        createBlock(4, 0, -2, 18); // Ruota della Fortuna (rosa)
+        
+        // Portali Principali a semicerchio davanti allo spawn
+        createBlock(-8, 1.5, -8, 14); // Academy (blu)
+        createBlock(0, 1.5, -12, 16); // Exchange PRO (verde)
+        createBlock(8, 1.5, -8, 15);  // Subbuteo (viola)
+        
+        // Altri Elementi
+        createBlock(-6, 1.5, 4, 17); // Rigori (bianco)
 
         function spawnTokens(count) {
             for(let i=0; i<count; i++) {
-                let x = (Math.random() - 0.5) * 40; let z = (Math.random() - 0.5) * 40;
-                if (Math.abs(x) < 4 && Math.abs(z) < 4) x += 6;
+                // Generazione diffusa per incoraggiare l'esplorazione
+                let x = (Math.random() - 0.5) * 50; 
+                let z = (Math.random() - 0.5) * 50;
+                // Evita di spawnare esattamente sopra al giocatore o al centro esatto
+                if (Math.abs(x) < 4 && Math.abs(z) < 4) {
+                    x += (Math.random() > 0.5 ? 8 : -8);
+                    z += (Math.random() > 0.5 ? 8 : -8);
+                }
                 // Alza leggermente lo spawn del gettone
                 createBlock(Math.floor(x), 0.5, Math.floor(z), 19);
             }
         }
-        spawnTokens(20);
+        spawnTokens(30); // Aumentato il numero di gettoni per una mappa più grande
 
-        function spawnNPC(type, x, z, text) { const npc = buildVoxelModel(type); npc.position.set(x, 0.5, z); npc.userData.speech = text; scene.add(npc); npcList.push(npc); }
-        spawnNPC('npc_tutor', -3, -12, "Raccogli 1 Gettone (🪙) esplorando la mappa ed entra nel Portale Blu!");
-        spawnNPC('npc_gamer', 12, -3, "Se trovi 1 Gettone, facciamo una partita a Subbuteo!");
+        // Disposizione NPC
+        function spawnNPC(type, x, z, text, rotationY = 0) { 
+            const npc = buildVoxelModel(type); 
+            npc.position.set(x, 0.5, z); 
+            npc.rotation.y = rotationY;
+            npc.userData.speech = text; 
+            scene.add(npc); 
+            npcList.push(npc); 
+        }
+        
+        // NPC Tutorial vicino allo spawn, ti accoglie appena entri
+        spawnNPC('npc_tutor', -2, 2, "Raccogli i Gettoni d'Oro (🪙) sparsi per la mappa per sbloccare i Portali!", Math.PI/4);
+        
+        // NPC vicino al Subbuteo
+        spawnNPC('npc_gamer', 6, -6, "Se trovi 1 Gettone, facciamo una partita a Subbuteo nel portale Viola!", -Math.PI/4);
+        
+        // NPC vicino al PC Exchange
+        spawnNPC('npc_tutor', -2, -2, "Usa il PC qui accanto per simulare una scommessa nel Mini-Mercato!", Math.PI/2);
+
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
         let velocity = new THREE.Vector3(); let direction = new THREE.Vector3();

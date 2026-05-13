@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Metaverso Zero To Hero - Betting Academy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { touch-action: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Inter', sans-serif; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+        .glass-panel-light { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.2); }
+
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 24px; height: 24px; transform: translate(-50%, -50%); display: flex; justify-content: center; align-items: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.9); box-shadow: 0 0 3px rgba(0,0,0,0.8); border-radius: 2px; }
+        #crosshair::before { width: 3px; height: 14px; } #crosshair::after { width: 14px; height: 3px; }
+        .crosshair-active { transform: translate(-50%, -50%) scale(1.6) !important; }
+        .crosshair-active::before, .crosshair-active::after { background: #00FF00 !important; box-shadow: 0 0 8px #00FF00; }
+
+        .mobile-control-zone { position: absolute; pointer-events: auto; }
+        #joystick-zone { bottom: 30px; left: 30px; width: 130px; height: 130px; border-radius: 50%; background: rgba(0,0,0,0.25); border: 2px solid rgba(255,255,255,0.3); display: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        #joystick-knob { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.8); position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); pointer-events: none; transition: transform 0.05s linear; }
+        
+        #action-buttons { bottom: 30px; right: 20px; display: none; gap: 12px; flex-wrap: wrap-reverse; justify-content: flex-end; width: 180px; }
+        .action-btn { width: 65px; height: 65px; border-radius: 50%; background: rgba(255,255,255,0.25); border: 2px solid rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 26px; box-shadow: 0 6px 15px rgba(0,0,0,0.2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: all 0.1s; }
+        .action-btn:active { background: rgba(255,255,255,0.6); transform: scale(0.9) translateY(4px); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .btn-interact { background: rgba(0, 255, 0, 0.4); border-color: #00FF00; color: #00FF00; display: none; animation: pulse-glow-green 1.5s infinite; }
+        
+        #touch-look-area { position: absolute; top: 0; right: 0; width: 100vw; height: 100vh; pointer-events: auto; z-index: 5; }
+
+        #inventory-bar { bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; pointer-events: auto; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 20px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: 90vw; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none; border: 1px solid rgba(255,255,255,0.1); }
+        #inventory-bar::-webkit-scrollbar { display: none; }
+        .inv-slot { width: 55px; height: 55px; flex-shrink: 0; border-radius: 12px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); position: relative; display: flex; justify-content: center; align-items: center; font-size: 26px; background-color: rgba(255,255,255,0.1); }
+        .inv-slot.active { border-color: #FFD700; transform: translateY(-8px) scale(1.15); box-shadow: 0 8px 20px rgba(255,215,0,0.5); background-color: rgba(255,255,255,0.3); z-index: 10; }
+        .inv-slot[data-id="13"], .inv-slot[data-id="18"] { border-color: rgba(156, 39, 176, 0.5); background-color: rgba(156, 39, 176, 0.2); }
+        .inv-slot[data-id="13"].active, .inv-slot[data-id="18"].active { border-color: #E040FB; box-shadow: 0 8px 20px rgba(224, 64, 251, 0.5); background-color: rgba(156, 39, 176, 0.4); }
+
+        #npc-speech-3d { position: absolute; top: -1000px; left: -1000px; transform: translate(-50%, -100%); z-index: 15; pointer-events: none; transition: opacity 0.3s; opacity: 0; }
+        .speech-bubble { background: white; border: 3px solid #3B82F6; border-radius: 16px; padding: 12px 16px; max-width: 250px; box-shadow: 0 8px 25px rgba(0,0,0,0.3); position: relative; font-family: 'Inter', sans-serif; }
+        .speech-bubble::after { content: ''; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); border-width: 10px 10px 0; border-style: solid; border-color: #3B82F6 transparent transparent transparent; }
+        .speech-bubble::before { content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); border-width: 8px 8px 0; border-style: solid; border-color: white transparent transparent transparent; z-index: 1; }
+
+        @media (max-width: 768px) {
+            #joystick-zone, #action-buttons { display: flex; z-index: 20; }
+            .desktop-only { display: none !important; }
+            #exchange-ui > div { border-radius: 0; max-height: 100vh; height: 100vh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+            #exchange-ui .flex-row { flex-direction: column !important; }
+            #exchange-ui .w-[320px] { width: 100% !important; }
+            .speech-bubble { max-width: 200px; font-size: 14px; }
+            #inventory-bar { bottom: 20px; padding: 6px; }
+            .inv-slot { width: 45px; height: 45px; font-size: 22px; }
+        }
+
+        .bg-back { background: linear-gradient(135deg, #2b82d4, #1e62a3); color: white; border-bottom: 3px solid #14497c; }
+        .bg-back-light { background-color: #e0effc; color: #1e62a3; }
+        .bg-lay { background: linear-gradient(135deg, #f694b5, #e06c94); color: white; border-bottom: 3px solid #b84a6e; }
+        .bg-lay-light { background-color: #fce6ee; color: #b84a6e; }
+        
+        .hide { display: none !important; pointer-events: none !important; }
+        
+        @keyframes popIn { from { opacity: 0; transform: scale(0.85) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .animate-pop { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        @keyframes pulse-glow-green { 0%, 100% { box-shadow: 0 0 10px rgba(0,255,0,0.3); } 50% { box-shadow: 0 0 30px rgba(0,255,0,0.8); } }
+        .pulse-highlight-green { animation: pulse-glow-green 1.5s infinite; }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div id="touch-look-area"></div>
+
+    <!-- HUD PRINCIPALE -->
+    <div id="hud">
+        <div id="crosshair"></div>
+        
+        <!-- Fumetto NPC -->
+        <div id="npc-speech-3d">
+            <div class="speech-bubble text-slate-800 animate-pop">
+                <div class="flex items-center gap-2 mb-1 border-b pb-1">
+                    <span id="npc-icon" class="text-xl">👨‍🏫</span><span id="npc-name" class="font-black text-blue-600 text-xs uppercase tracking-wider">Prof. Voxel</span>
+                </div>
+                <p id="npc-speech-text" class="font-semibold text-sm leading-tight">Benvenuto!</p>
+            </div>
+        </div>
+        
+        <div class="absolute top-safe left-4 glass-panel text-white p-3 md:p-4 rounded-2xl animate-pop pointer-events-auto flex flex-col gap-2 mt-4 ml-2">
+            <div>
+                <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-500 tracking-tight drop-shadow-sm">€<span id="player-balance">1000.00</span></h1>
+            </div>
+            <div id="spectators-box" class="bg-black/50 px-3 py-2 rounded-xl border border-white/20 transition-all duration-300 flex items-center gap-2">
+                <p class="text-xs text-gray-200 font-bold uppercase tracking-wider">🎟️ Fan: <span id="spectators-count" class="text-purple-400 font-black text-base">0</span></p>
+            </div>
+        </div>
+        
+        <!-- Voxel Inventory Esteso -->
+        <div id="inventory-bar" class="animate-pop mb-safe">
+            <div class="inv-slot active" data-id="1" title="Erba">🟩</div>
+            <div class="inv-slot" data-id="2" title="Linea Bianca">⬜</div>
+            <div class="inv-slot" data-id="3" title="Palo">🥅</div>
+            <div class="inv-slot" data-id="4" title="Rete">🕸️</div>
+            <div class="inv-slot" data-id="5" title="Pallone Voxel">⚽</div>
+            <div class="inv-slot" data-id="6" title="Coppa Voxel">🏆</div>
+            <div class="inv-slot" data-id="7" title="Cartellini">🟥🟨</div>
+            <div class="inv-slot" data-id="8" title="Maglietta">👕</div>
+            <div class="inv-slot" data-id="9" title="Pantaloncini">🩳</div>
+            <div class="inv-slot" data-id="10" title="Calzettoni">🧦</div>
+            <div class="inv-slot" data-id="11" title="Scarpe">👟</div>
+            <div class="inv-slot" data-id="12" title="Terminale">💻</div>
+            <div class="inv-slot" data-id="13" title="Biglietto VIP">🎟️</div>
+            <div class="inv-slot" data-id="18" title="Salvadanaio Ruota">🐷</div>
+            <div class="inv-slot" data-id="19" title="Gettone">🪙</div>
+        </div>
+
+        <div id="joystick-zone" class="mobile-control-zone mb-safe ml-safe"><div id="joystick-knob"></div></div>
+        
+        <div id="action-buttons" class="mobile-control-zone mb-safe mr-safe">
+            <div class="action-btn" id="btn-destroy">🔨</div>
+            <div class="action-btn" id="btn-build">🧱</div>
+            <div class="action-btn btn-interact" id="btn-interact-mobile">🚪</div>
+            <div class="action-btn w-full mt-2" id="btn-jump">⬆️</div>
+        </div>
+
+        <!-- Dynamic Interaction Prompt -->
+        <div id="interaction-prompt" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 mt-16 glass-panel text-white px-6 py-3 rounded-full hide border-2 border-green-400/80 desktop-only pulse-highlight-green shadow-2xl">
+            <span class="font-black text-green-400 tracking-widest uppercase text-sm flex items-center gap-3">
+                <kbd class="bg-white/20 px-3 py-1 rounded-md text-white font-mono shadow-inner">E</kbd> <span id="prompt-text">Interagisci</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Intro Menu Metaverso -->
+    <div id="tutorial-ui" class="absolute inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center z-50 transition-opacity duration-500 p-4">
+        <div class="glass-panel-light rounded-[2rem] p-8 md:p-12 max-w-2xl w-full text-slate-800 animate-pop border-0 text-center shadow-2xl relative overflow-hidden">
+            <h2 class="text-4xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-br from-indigo-600 to-purple-600 mb-2">Metaverso Academy</h2>
+            <p class="text-sm font-black text-slate-400 uppercase tracking-widest mb-8">Hub Centrale Zero-To-Hero</p>
+            
+            <div class="space-y-4 mb-10 text-left text-sm text-slate-600 relative z-10">
+                <p class="text-center font-bold text-lg mb-6">Benvenuto nell'HUB! Da qui puoi:</p>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-2xl border border-blue-200">
+                        <span class="text-3xl mb-2 block">🎓</span>
+                        <h4 class="font-black text-blue-800">Academy</h4>
+                        <p class="text-xs mt-1">Entra nel portale blu per studiare.</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-2xl border border-purple-200">
+                        <span class="text-3xl mb-2 block">🕹️</span>
+                        <h4 class="font-black text-purple-800">Sala Giochi</h4>
+                        <p class="text-xs mt-1">Gioca a Subbuteo al portale viola.</p>
+                    </div>
+                    <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-200">
+                        <span class="text-3xl mb-2 block">📈</span>
+                        <h4 class="font-black text-emerald-800">Exchange PRO</h4>
+                        <p class="text-xs mt-1">Piattaforma avanzata (portale verde).</p>
+                    </div>
+                    <div class="bg-pink-50 p-4 rounded-2xl border border-pink-300">
+                        <span class="text-3xl mb-2 block">🐷</span>
+                        <h4 class="font-black text-pink-800">Ruota Fortuna</h4>
+                        <p class="text-xs mt-1">Trova il Salvadanaio e inserisci i Gettoni!</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200 text-center">
+                    <p class="text-xs font-bold text-yellow-800">💡 Oppure puoi restare qui nella Lobby, usare gli attrezzi in basso e costruire il tuo Stadio!</p>
+                </div>
+            </div>
+            
+            <button id="start-btn" class="relative z-10 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(79,70,229,0.4)] transition-all transform active:scale-95 text-xl tracking-wide">
+                ENTRA NEL METAVERSO
+            </button>
+        </div>
+    </div>
+
+    <!-- Exchange UI (Mini-Game Interno) -->
+    <div id="exchange-ui" class="absolute inset-0 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center md:justify-center z-40 hide">
+        <div class="w-full max-w-6xl glass-panel-light md:rounded-3xl shadow-2xl flex flex-col animate-pop border border-white/60 h-full md:h-auto md:max-h-[90vh]">
+            <div class="bg-slate-900 text-white p-5 flex justify-between items-center sticky top-0 z-10 shrink-0 md:rounded-t-3xl border-b border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-yellow-400/20 rounded-xl"><svg class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg></div>
+                    <div><h2 class="text-xl md:text-2xl font-black tracking-tight">Mini-Mercato Locale</h2><p class="text-xs text-slate-400 mt-1 uppercase font-bold tracking-widest"><strong class="text-red-400 bg-red-400/10 px-2 py-0.5 rounded">Squadra Rossa Vincente</strong></p></div>
+                </div>
+                <button id="close-exchange" class="bg-slate-800 active:bg-slate-700 text-white px-4 py-3 rounded-xl text-sm font-black flex items-center gap-2">ESCI</button>
+            </div>
+
+            <div class="flex flex-col md:flex-row flex-1 p-5 gap-5 overflow-y-auto bg-slate-50/80">
+                <div class="flex-1 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 shrink-0 flex flex-col">
+                    <div class="flex font-black text-[10px] text-center mb-2 text-slate-500 uppercase tracking-widest mt-4">
+                        <div class="flex-1 text-left hidden sm:block pt-2">Soldi in attesa</div>
+                        <div class="w-24 md:w-28 bg-blue-100 text-blue-800 py-2 rounded-t-xl mx-1 border-b-[3px] border-blue-300">PUNTA</div>
+                        <div class="w-24 md:w-28 bg-pink-100 text-pink-800 py-2 rounded-t-xl mx-1 border-b-[3px] border-pink-300">BANCA</div>
+                        <div class="flex-1 text-right hidden sm:block pt-2">Richieste</div>
+                    </div>
+                    <div id="order-book-container" class="space-y-2 md:space-y-3 relative z-10"></div>
+                </div>
+
+                <div class="w-full md:w-[360px] flex flex-col gap-5 shrink-0">
+                    <div class="bg-white p-5 rounded-2xl shadow-lg border-t-[6px]" id="bet-ticket" style="border-color: #cbd5e1;">
+                        <div class="flex gap-3 mb-5">
+                            <button class="flex-1 py-3 rounded-xl font-black text-sm text-slate-400 bg-slate-100" id="btn-tab-back" onclick="selectType('back')">PUNTA</button>
+                            <button class="flex-1 py-3 rounded-xl font-black text-sm text-slate-400 bg-slate-100" id="btn-tab-lay" onclick="selectType('lay')">BANCA</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-5">
+                            <div><label class="block text-[10px] font-black text-slate-400 mb-1">Quota</label><input type="number" id="input-odds" step="0.01" min="1.01" value="2.00" class="w-full border-2 border-slate-200 p-3 text-xl font-black rounded-xl bg-slate-50 text-center"></div>
+                            <div><label class="block text-[10px] font-black text-slate-400 mb-1">Importo (€)</label><input type="number" id="input-stake" step="1" min="2" value="10" class="w-full border-2 border-slate-200 p-3 text-xl font-black rounded-xl bg-slate-50 text-center"></div>
+                        </div>
+                        <button id="place-bet-btn" class="w-full bg-slate-200 text-slate-400 py-4 rounded-xl font-black text-base uppercase" disabled>Seleziona Lato</button>
+                    </div>
+                    <button id="simulate-match-btn" class="bg-emerald-500 text-white p-5 rounded-2xl shadow-lg font-black text-lg uppercase flex items-center justify-center gap-3 mt-auto">⚽ FISCHIO D'INIZIO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Match Result UI (Mini-Game Interno) -->
+    <div id="match-result-ui" class="absolute inset-0 bg-slate-900/95 backdrop-blur-xl flex items-center justify-center z-50 hide p-4">
+        <div class="glass-panel-light rounded-[2rem] p-8 md:p-12 max-w-sm w-full text-center shadow-2xl relative">
+            <h2 class="text-3xl font-black text-slate-800 mb-6 uppercase">Risultato</h2>
+            <div id="result-winner" class="text-2xl font-black my-6 py-8 rounded-3xl shadow-inner text-white flex flex-col items-center"></div>
+            <button id="back-to-build-btn" class="w-full bg-slate-800 text-white font-black py-4 rounded-2xl shadow-lg text-lg">🔙 TORNA AL CAMPO</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // Previene scroll e zoom nativo su Mobile
+        document.addEventListener('touchmove', function(e) { e = e.originalEvent || e; if(e.scale !== 1) e.preventDefault(); }, { passive: false });
+        const vibrate = (pattern) => { if (navigator.vibrate) navigator.vibrate(pattern); };
+
+        let gameState = { 
+            balance: 1000.00, inventorySelection: 12, inExchange: false, isSimulating: false,
+            myBets: [], spectators: 0, currentInteractTarget: null,
+            isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window)
+        };
+
+        // URL dei Portali Esterni & Salvadanaio
+        const PORTAL_LINKS = {
+            14: "https://zero-to-hero-academy-betting-exchan.vercel.app/",
+            15: "https://subbuteo.vercel.app/",
+            16: "https://demo-betting-exchange.vercel.app/?lang=en",
+            17: "https://penalties-zero-to-hero-academy.vercel.app/",
+            18: "https://wheel-of-fortune-zero-to-hero-acade.vercel.app/"
+        };
+
+        const PORTAL_NAMES = {
+            12: "Apri Terminale (Locale)",
+            14: "Entra in Academy",
+            15: "Gioca a Subbuteo",
+            16: "Apri Exchange PRO",
+            17: "Tira i Rigori",
+            18: "Usa Salvadanaio (Gira Ruota)"
+        };
+
+        // ==========================================
+        // GENERATORE PROCEDURALE VOXEL ART
+        // ==========================================
+        const textureLoader = new THREE.TextureLoader();
+        const tokenTexture = textureLoader.load('logo-tondo.jpeg', undefined, undefined, () => console.log('Logo tondo non trovato, uso default gold.'));
+
+        const matCache = {
+            white: new THREE.MeshLambertMaterial({color: 0xffffff}),
+            black: new THREE.MeshLambertMaterial({color: 0x111111}),
+            green1: new THREE.MeshLambertMaterial({color: 0x4CAF50}),
+            green2: new THREE.MeshLambertMaterial({color: 0x388E3C}),
+            red: new THREE.MeshLambertMaterial({color: 0xF44336}),
+            blue: new THREE.MeshLambertMaterial({color: 0x1976D2}),
+            yellow: new THREE.MeshLambertMaterial({color: 0xFFC107}),
+            gold: new THREE.MeshStandardMaterial({color: 0xFFD700, metalness: 0.7, roughness: 0.3}),
+            orange: new THREE.MeshLambertMaterial({color: 0xFF9800}),
+            purple: new THREE.MeshLambertMaterial({color: 0x9C27B0}),
+            grey: new THREE.MeshLambertMaterial({color: 0x9E9E9E}),
+            glow: new THREE.MeshStandardMaterial({color: 0xFFD700, emissive: 0xaa7700, emissiveIntensity: 0.6}),
+            skin: new THREE.MeshLambertMaterial({color: 0xFFCC99}),
+            pink: new THREE.MeshLambertMaterial({color: 0xFFB6C1}),
+            darkPink: new THREE.MeshLambertMaterial({color: 0xFF69B4}),
+            tokenMat: new THREE.MeshStandardMaterial({color: 0xFFD700, map: tokenTexture, metalness: 0.5, roughness: 0.4}),
+            
+            portal_academy: new THREE.MeshStandardMaterial({color: 0x3B82F6, emissive: 0x1D4ED8, emissiveIntensity: 0.8, transparent: true, opacity: 0.8}),
+            portal_arcade: new THREE.MeshStandardMaterial({color: 0xA855F7, emissive: 0x7E22CE, emissiveIntensity: 0.8, transparent: true, opacity: 0.8}),
+            portal_exchange: new THREE.MeshStandardMaterial({color: 0x10B981, emissive: 0x047857, emissiveIntensity: 0.8, transparent: true, opacity: 0.8}),
+            portal_penalty: new THREE.MeshStandardMaterial({color: 0xFFFFFF, emissive: 0xDDDDDD, emissiveIntensity: 0.5, transparent: true, opacity: 0.8}),
+        };
+
+        function buildVoxelModel(type) {
+            const group = new THREE.Group();
+            group.userData = { isVisual: true, targetScale: 1.0, currentScale: 0.1 };
+            group.scale.set(0.1, 0.1, 0.1); 
+
+            const addV = (x, y, z, mat, s=0.1) => {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), matCache[mat]);
+                m.position.set(x*s, y*s, z*s);
+                m.castShadow = !gameState.isMobile; m.receiveShadow = !gameState.isMobile;
+                group.add(m);
+            };
+
+            // Blocchi Base
+            if(type === 1) { for(let x=-0.5; x<=0.5; x+=1) for(let y=-0.5; y<=0.5; y+=1) for(let z=-0.5; z<=0.5; z+=1) addV(x, y, z, Math.random()>0.5?'green1':'green2', 0.5); }
+            else if(type === 2) { for(let x=-0.5; x<=0.5; x+=1) for(let z=-0.5; z<=0.5; z+=1) addV(x, -0.4, z, 'white', 0.5); }
+            else if(type === 3) { for(let y=-2; y<=2; y++) addV(0, y, 0, 'white', 0.2); }
+            else if(type === 4) { for(let x=-2; x<=2; x+=2) for(let y=-2; y<=2; y+=2) { addV(x, y, 0, 'white', 0.1); addV(x, 0, y, 'white', 0.1); addV(0, x, y, 'white', 0.1); } }
+            else if(type === 5) { for(let x=-2; x<=2; x++) for(let y=-2; y<=2; y++) for(let z=-2; z<=2; z++) if(x*x+y*y+z*z <= 5) addV(x, y, z, Math.random()>0.7?'black':'white', 0.1); }
+            else if(type === 6) { for(let x=-2; x<=2; x++) for(let z=-2; z<=2; z++) addV(x, -3, z, 'gold', 0.1); addV(0,-2,0,'gold',0.1); addV(0,-1,0,'gold',0.1); for(let x=-2; x<=2; x++) for(let y=0; y<=2; y++) for(let z=-2; z<=2; z++) if(x===-2||x===2||z===-2||z===2 || y===0) addV(x,y,z,'gold', 0.1); }
+            else if(type === 7) { for(let x=-1; x<=1; x++) for(let y=-2; y<=0; y++) addV(x, y, -1, 'red', 0.1); for(let x=0; x<=2; x++) for(let y=-1; y<=1; y++) addV(x, y, 1, 'yellow', 0.1); }
+            else if(type === 8) { for(let x=-2; x<=2; x++) for(let y=-2; y<=3; y++) addV(x, y, 0, 'red', 0.1); for(let x=-4; x<=-3; x++) for(let y=1; y<=3; y++) addV(x, y, 0, 'white', 0.1); for(let x=3; x<=4; x++) for(let y=1; y<=3; y++) addV(x, y, 0, 'white', 0.1); }
+            else if(type === 9) { for(let x=-2; x<=2; x++) for(let y=1; y<=3; y++) addV(x, y, 0, 'blue', 0.1); for(let x=-2; x<=-1; x++) for(let y=-1; y<=0; y++) addV(x, y, 0, 'blue', 0.1); for(let x=1; x<=2; x++) for(let y=-1; y<=0; y++) addV(x, y, 0, 'blue', 0.1); }
+            else if(type === 10) { for(let y=-3; y<=2; y++) addV(-1, y, 0, 'white', 0.1); for(let z=0; z<=2; z++) addV(-1, -3, z, 'white', 0.1); for(let y=-3; y<=2; y++) addV(1, y, 0, 'white', 0.1); for(let z=0; z<=2; z++) addV(1, -3, z, 'white', 0.1); }
+            else if(type === 11) { for(let z=-1; z<=2; z++) { addV(-1, -3, z, 'orange', 0.1); addV(1, -3, z, 'orange', 0.1); } addV(-1, -2, -1, 'black', 0.1); addV(1, -2, -1, 'black', 0.1); }
+            else if(type === 12) { for(let x=-3; x<=3; x++) for(let y=-2; y<=2; y++) addV(x, y, 0, 'black', 0.1); for(let x=-2; x<=2; x++) for(let y=-1; y<=1; y++) addV(x, y, 0.1, 'glow', 0.1); addV(0, -3, 0, 'grey', 0.1); addV(0, -4, 0, 'grey', 0.1); for(let x=-2; x<=2; x++) addV(x, -4, 1, 'grey', 0.1); }
+            else if(type === 13) { for(let x=-3; x<=3; x++) for(let y=-1; y<=1; y++) addV(x, y, 0, (x===-2||x===2)?'gold':'purple', 0.1); }
+            
+            // Portali Esterni
+            else if(type === 14) { for(let x=-4; x<=4; x++) for(let y=-4; y<=4; y++) if(Math.random()>0.2) addV(x, y, 0, 'portal_academy', 0.2); group.userData.targetScale = 1.5; }
+            else if(type === 15) { for(let x=-4; x<=4; x++) for(let y=-4; y<=4; y++) if(Math.random()>0.2) addV(x, y, 0, 'portal_arcade', 0.2); group.userData.targetScale = 1.5; }
+            else if(type === 16) { for(let x=-4; x<=4; x++) for(let y=-4; y<=4; y++) if(Math.random()>0.2) addV(x, y, 0, 'portal_exchange', 0.2); group.userData.targetScale = 1.5; }
+            else if(type === 17) { for(let x=-4; x<=4; x++) for(let y=-4; y<=4; y++) if(Math.random()>0.2) addV(x, y, 0, (x+y)%2===0?'portal_penalty':'black', 0.2); group.userData.targetScale = 1.5; }
+            
+            // Salvadanaio (Piggy Bank)
+            else if(type === 18) {
+                const s = 0.1;
+                for(let x=-1.5; x<=1.5; x++) for(let y=0; y<=2; y++) for(let z=-2; z<=2; z++) addV(x, y, z, 'pink', s); // Corpo
+                addV(0, 1, 2.5, 'darkPink', s); addV(-0.5, 1, 2.5, 'darkPink', s); addV(0.5, 1, 2.5, 'darkPink', s); // Muso
+                addV(-1, -1, -1, 'pink', s); addV(1, -1, -1, 'pink', s); addV(-1, -1, 1, 'pink', s); addV(1, -1, 1, 'pink', s); // Zampe
+                addV(-1.5, 2, 1, 'darkPink', s); addV(1.5, 2, 1, 'darkPink', s); // Orecchie
+                addV(0, 2.5, 0, 'black', s); // Fessura monete
+                group.userData.targetScale = 1.2;
+            }
+            // Gettone / Token (Logo)
+            else if(type === 19) {
+                const coinGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.08, 24);
+                coinGeo.rotateX(Math.PI / 2);
+                const m = new THREE.Mesh(coinGeo, matCache['tokenMat']);
+                m.castShadow = !gameState.isMobile; m.receiveShadow = !gameState.isMobile;
+                group.add(m);
+                group.userData.targetScale = 1.2;
+            }
+
+            // NPCs
+            else if(type === 'npc_tutor' || type === 'npc_gamer') {
+                const s = 0.15;
+                const shirtColor = type === 'npc_tutor' ? 'grey' : 'purple';
+                const hasHat = type === 'npc_gamer';
+                
+                for(let x=-1.5; x<=1.5; x++) for(let y=2; y<=5; y++) for(let z=-1.5; z<=1.5; z++) addV(x, y, z, 'skin', s);
+                addV(-0.5, 3.5, 2, 'black', s); addV(0.5, 3.5, 2, 'black', s); addV(0, 3.5, 2, 'white', s);
+                if(hasHat) { for(let x=-2; x<=2; x++) for(let z=-2; z<=2; z++) addV(x, 5.5, z, 'orange', s); for(let x=-2; x<=2; x++) addV(x, 5.5, 3, 'orange', s); }
+                for(let x=-2; x<=2; x++) for(let y=-2; y<=1; y++) for(let z=-1; z<=1; z++) addV(x, y, z, shirtColor, s);
+                if(type === 'npc_tutor') for(let y=-1; y<=1; y++) addV(0, y, 1.5, 'red', s); 
+                for(let x=-1.5; x<=-0.5; x++) for(let y=-5; y<=-3; y++) addV(x, y, 0, 'black', s);
+                for(let x=0.5; x<=1.5; x++) for(let y=-5; y<=-3; y++) addV(x, y, 0, 'black', s);
+                
+                group.userData.targetScale = 1.0;
+            }
+            return group;
+        }
+
+        // ==========================================
+        // SETUP MOTORE 3D & HUB LOBBY
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a192f); 
+        scene.fog = new THREE.FogExp2(0x0a192f, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.shadowMap.enabled = !gameState.isMobile;
+        container.appendChild(renderer.domElement);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6); scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xfff5b6, 1.0); dirLight.position.set(30, 60, -20); scene.add(dirLight);
+
+        const objects = []; 
+        const npcList = []; 
+        
+        const planeMat = new THREE.MeshStandardMaterial({ color: 0x112240, roughness: 0.8 });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), planeMat);
+        plane.rotation.x = -Math.PI / 2; plane.position.y = -0.5;
+        scene.add(plane); objects.push(plane);
+
+        const hitBoxGeo = new THREE.BoxGeometry(1.5, 2, 1.5); 
+        const hitBoxMat = new THREE.MeshBasicMaterial({visible: false});
+
+        function createBlock(x, y, z, type) {
+            const hitbox = new THREE.Mesh(hitBoxGeo, hitBoxMat);
+            hitbox.position.set(x, y, z);
+            hitbox.userData = { isVoxel: true, type: type };
+            
+            const visualModel = buildVoxelModel(type);
+            hitbox.add(visualModel);
+
+            if(!gameState.isMobile) {
+                if(type === 14) hitbox.add(new THREE.PointLight(0x3B82F6, 1.5, 10)); 
+                if(type === 15) hitbox.add(new THREE.PointLight(0xA855F7, 1.5, 10)); 
+                if(type === 16) hitbox.add(new THREE.PointLight(0x10B981, 1.5, 10)); 
+                if(type === 17) hitbox.add(new THREE.PointLight(0xFFFFFF, 1.0, 10)); 
+                if(type === 18) hitbox.add(new THREE.PointLight(0xFF69B4, 1.0, 5)); // Luce rosa salvadanaio
+            }
+            
+            scene.add(hitbox); objects.push(hitbox);
+            return visualModel;
+        }
+
+        // COSTRUZIONE HUB CENTRALE
+        createBlock(0, 0, -5, 12); // Terminale Locale
+        createBlock(4, 0, -3, 18); // Salvadanaio della Ruota di default
+        for(let i=0; i<3; i++) createBlock(4 + Math.random()*2-1, 0, -4 + Math.random()*2-1, 19); // Gettoni sparsi
+
+        // Portali
+        createBlock(0, 1.5, -15, 14); // Nord: Academy
+        createBlock(15, 1.5, 0, 15);  // Est: Sala Giochi (Arcade)
+        createBlock(0, 1.5, 15, 16);  // Sud: Exchange PRO
+        createBlock(-15, 1.5, 0, 17); // Ovest: Porta Rigori
+
+        function spawnNPC(type, x, z, text) {
+            const npc = buildVoxelModel(type);
+            npc.position.set(x, 0.5, z);
+            npc.userData.speech = text;
+            scene.add(npc);
+            npcList.push(npc);
+            if(!gameState.isMobile) npc.add(new THREE.PointLight(0xffffff, 0.5, 4));
+        }
+
+        spawnNPC('npc_tutor', -3, -12, "L'Academy ti aspetta. Entra nel Portale Blu per studiare!");
+        spawnNPC('npc_gamer', 12, -3, "Ehi bro! Entra nel portale viola, facciamo una partita a Subbuteo!");
+
+        // ==========================================
+        // CONTROLLI (TOUCH + DESKTOP)
+        // ==========================================
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+        let velocity = new THREE.Vector3(); let direction = new THREE.Vector3();
+        const clock = new THREE.Clock();
+
+        const desktopControls = new PointerLockControls(camera, document.body); camera.position.set(0, 1.6, 5);
+
+        let joystickActive = false, joyOrigin = {x:0, y:0}, joyDelta = {x:0, y:0};
+        const joyZone = document.getElementById('joystick-zone'); const joyKnob = document.getElementById('joystick-knob');
+        joyZone.addEventListener('touchstart', (e) => { e.preventDefault(); joystickActive = true; const rect = joyZone.getBoundingClientRect(); joyOrigin.x = rect.left + rect.width / 2; joyOrigin.y = rect.top + rect.height / 2; updateJoystick(e.changedTouches[0]); }, {passive: false});
+        joyZone.addEventListener('touchmove', (e) => { e.preventDefault(); if(joystickActive) updateJoystick(e.changedTouches[0]); }, {passive: false});
+        const resetJoystick = () => { joystickActive = false; joyDelta = {x:0, y:0}; joyKnob.style.transform = `translate(0px, 0px)`; moveForward = moveBackward = moveLeft = moveRight = false; };
+        joyZone.addEventListener('touchend', resetJoystick); joyZone.addEventListener('touchcancel', resetJoystick);
+
+        function updateJoystick(touch) {
+            let dx = touch.clientX - joyOrigin.x; let dy = touch.clientY - joyOrigin.y;
+            const maxR = 35; const distance = Math.min(Math.sqrt(dx*dx + dy*dy), maxR); const angle = Math.atan2(dy, dx);
+            const renderX = Math.cos(angle) * distance; const renderY = Math.sin(angle) * distance;
+            joyKnob.style.transform = `translate(${renderX}px, ${renderY}px)`;
+            joyDelta.x = renderX / maxR; joyDelta.y = renderY / maxR;
+            moveForward = joyDelta.y < -0.2; moveBackward = joyDelta.y > 0.2; moveLeft = joyDelta.x < -0.2; moveRight = joyDelta.x > 0.2;
+        }
+
+        let lookActive = false, lastLookTouch = {x:0, y:0};
+        const lookArea = document.getElementById('touch-look-area'); const PI_2 = Math.PI / 2; const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        lookArea.addEventListener('touchstart', (e) => { if(gameState.inExchange || gameState.isSimulating) return; lookActive = true; lastLookTouch = {x: e.touches[0].clientX, y: e.touches[0].clientY}; }, {passive: true});
+        lookArea.addEventListener('touchmove', (e) => { if(!lookActive || gameState.inExchange || gameState.isSimulating) return; e.preventDefault(); const touch = e.touches[0]; const movementX = touch.clientX - lastLookTouch.x; const movementY = touch.clientY - lastLookTouch.y; lastLookTouch = {x: touch.clientX, y: touch.clientY}; euler.setFromQuaternion(camera.quaternion); euler.y -= movementX * 0.005; euler.x -= movementY * 0.005; euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x)); camera.quaternion.setFromEuler(euler); }, {passive: false});
+        lookArea.addEventListener('touchend', () => lookActive = false);
+
+        document.addEventListener('keydown', (e) => {
+            if(gameState.inExchange || gameState.isMobile || gameState.isSimulating) return;
+            switch(e.code) {
+                case 'KeyW': moveForward = true; break; case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break; case 'KeyD': moveRight = true; break;
+                case 'Space': if(canJump) velocity.y += 10; canJump = false; break;
+                case 'KeyE': executeInteraction(); break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            if(gameState.isMobile) return;
+            switch(e.code) { case 'KeyW': moveForward = false; break; case 'KeyA': moveLeft = false; break; case 'KeyS': moveBackward = false; case 'KeyD': moveRight = false; break; }
+        });
+
+        document.getElementById('btn-jump').addEventListener('touchstart', (e) => { e.preventDefault(); if(canJump) velocity.y += 10; canJump = false; }, {passive: false});
+        document.getElementById('btn-interact-mobile').addEventListener('touchstart', (e) => { e.preventDefault(); executeInteraction(); }, {passive: false});
+        
+        const raycaster = new THREE.Raycaster(); const centerPoint = new THREE.Vector2(0, 0);
+
+        function handleBlockAction(actionType) {
+            if(gameState.inExchange || gameState.isSimulating) return;
+            raycaster.setFromCamera(centerPoint, camera);
+            const intersects = raycaster.intersectObjects(objects, false);
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                if (intersect.distance > 8) return;
+                
+                const type = intersect.object.userData.type;
+                if(type >= 14 && type <= 17) return; // Non distruggere portali
+                if(type === 12) return; // Terminale principale
+
+                if (actionType === 'destroy' && intersect.object !== plane) {
+                    scene.remove(intersect.object); objects.splice(objects.indexOf(intersect.object), 1);
+                    vibrate(40);
+                } else if (actionType === 'build') {
+                    const pos = intersect.point.clone().add(intersect.face.normal);
+                    pos.divideScalar(1).floor().addScalar(0.5);
+                    createBlock(pos.x, pos.y, pos.z, gameState.inventorySelection);
+                    vibrate(20);
+                }
+            }
+        }
+
+        function executeInteraction() {
+            if(gameState.currentInteractTarget) {
+                const target = gameState.currentInteractTarget;
+                if(target === 12) {
+                    openExchange();
+                } else if (PORTAL_LINKS[target]) {
+                    window.open(PORTAL_LINKS[target], '_blank');
+                    vibrate([50, 50, 50]);
+                }
+            }
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            if(gameState.isMobile || !desktopControls.isLocked || gameState.inExchange || gameState.isSimulating) return;
+            if(e.button === 0) handleBlockAction('destroy'); else if(e.button === 2) handleBlockAction('build');
+        });
+        document.getElementById('btn-destroy').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction('destroy'); }, {passive: false});
+        document.getElementById('btn-build').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction('build'); }, {passive: false});
+
+        const invSlots = document.querySelectorAll('.inv-slot');
+        function selectInventory(id) {
+            gameState.inventorySelection = parseInt(id);
+            invSlots.forEach(s => s.classList.remove('active'));
+            const activeSlot = document.querySelector(`.inv-slot[data-id="${id}"]`);
+            if(activeSlot) activeSlot.classList.add('active');
+            vibrate(10);
+        }
+        invSlots.forEach(slot => slot.addEventListener('click', (e) => selectInventory(e.currentTarget.dataset.id)));
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('tutorial-ui').style.opacity = '0';
+            setTimeout(() => { 
+                document.getElementById('tutorial-ui').classList.add('hide'); 
+                if(!gameState.isMobile) desktopControls.lock(); 
+            }, 500);
+        });
+
+        // ==========================================
+        // ANIMAZIONI E LOOP FISICA
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            
+            objects.forEach(hitbox => {
+                if(hitbox.userData.isVoxel && hitbox.children.length > 0) {
+                    const visualGrp = hitbox.children[0];
+                    if(visualGrp.userData.currentScale < visualGrp.userData.targetScale) {
+                        visualGrp.userData.currentScale += 0.08;
+                        if(visualGrp.userData.currentScale > visualGrp.userData.targetScale) visualGrp.userData.currentScale = visualGrp.userData.targetScale;
+                        const s = visualGrp.userData.currentScale;
+                        visualGrp.scale.set(s, s, s);
+                    }
+                    
+                    const type = hitbox.userData.type;
+                    if((type >= 5 && type !== 12 && type < 14) || type === 19) {
+                        visualGrp.rotation.y += 0.02; 
+                        visualGrp.position.y = Math.sin(time * 3 + hitbox.position.x) * 0.1; 
+                    }
+                    if(type >= 14 && type <= 17) {
+                        visualGrp.rotation.z += 0.01; visualGrp.rotation.x += 0.01;
+                        visualGrp.position.y = Math.sin(time * 2 + hitbox.position.x) * 0.2;
+                    }
+                }
+            });
+
+            let closestNPC = null; let minNPCDist = 10;
+            const activeObj = gameState.isMobile ? camera : desktopControls.getObject();
+
+            npcList.forEach(npc => {
+                if(npc.userData.currentScale < npc.userData.targetScale) {
+                    npc.userData.currentScale += 0.05;
+                    npc.scale.setScalar(Math.min(npc.userData.currentScale, npc.userData.targetScale));
+                }
+                npc.position.y = 0.5 + Math.sin(time * 5 + npc.position.x) * 0.05;
+                const targetPos = activeObj.position.clone(); targetPos.y = npc.position.y;
+                npc.lookAt(targetPos);
+
+                const dist = npc.position.distanceTo(activeObj.position);
+                if(dist < minNPCDist) { minNPCDist = dist; closestNPC = npc; }
+            });
+
+            const speechBubble = document.getElementById('npc-speech-3d');
+            if(closestNPC && minNPCDist < 8 && !gameState.inExchange) {
+                document.getElementById('npc-speech-text').innerHTML = closestNPC.userData.speech;
+                document.getElementById('npc-icon').innerText = closestNPC.userData.speech.includes('Subbuteo') ? '🕹️' : '👨‍🏫';
+                document.getElementById('npc-name').innerText = closestNPC.userData.speech.includes('Subbuteo') ? 'Gamer' : 'Prof. Voxel';
+
+                speechBubble.style.opacity = '1';
+                const headPos = closestNPC.position.clone(); headPos.y += 1.5; headPos.project(camera);
+                if(headPos.z > 1) speechBubble.style.display = 'none';
+                else {
+                    speechBubble.style.display = 'block';
+                    const x = (headPos.x * .5 + .5) * window.innerWidth;
+                    const y = (headPos.y * -.5 + .5) * window.innerHeight;
+                    speechBubble.style.left = `${x}px`; speechBubble.style.top = `${y}px`;
+                }
+            } else {
+                speechBubble.style.opacity = '0';
+            }
+
+            if (desktopControls.isLocked || gameState.isMobile) {
+                if (gameState.inExchange || gameState.isSimulating) return;
+                
+                const delta = Math.min(clock.getDelta(), 0.1);
+                velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; velocity.y -= 9.8 * 3.5 * delta;
+
+                if(gameState.isMobile) {
+                    direction.z = joyDelta.y; direction.x = joyDelta.x; direction.normalize();
+                    const camEuler = new THREE.Euler(0, 0, 0, 'YXZ'); camEuler.setFromQuaternion(camera.quaternion);
+                    const speed = 40.0;
+                    if(joyDelta.y !== 0 || joyDelta.x !== 0) {
+                        const moveX = (direction.x * Math.cos(camEuler.y) + direction.z * Math.sin(camEuler.y));
+                        const moveZ = (-direction.x * Math.sin(camEuler.y) + direction.z * Math.cos(camEuler.y));
+                        velocity.x -= moveX * speed * delta; velocity.z -= moveZ * speed * delta;
+                    }
+                    camera.position.x -= velocity.x * delta; camera.position.z -= velocity.z * delta; camera.position.y += velocity.y * delta;
+                } else {
+                    direction.z = Number(moveForward) - Number(moveBackward); direction.x = Number(moveRight) - Number(moveLeft); direction.normalize();
+                    const speed = 60.0;
+                    if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+                    if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+                    desktopControls.moveRight(-velocity.x * delta); desktopControls.moveForward(-velocity.z * delta); desktopControls.getObject().position.y += velocity.y * delta;
+                }
+
+                if (activeObj.position.y < 1.6) { velocity.y = 0; activeObj.position.y = 1.6; canJump = true; }
+
+                raycaster.setFromCamera(centerPoint, camera);
+                const intersects = raycaster.intersectObjects(objects, false);
+                const prompt = document.getElementById('interaction-prompt');
+                const promptText = document.getElementById('prompt-text');
+                const btnInteract = document.getElementById('btn-interact-mobile');
+                const crosshair = document.getElementById('crosshair');
+                
+                gameState.currentInteractTarget = null;
+
+                if (intersects.length > 0 && intersects[0].distance < 6) {
+                    const type = intersects[0].object.userData.type;
+                    if(PORTAL_NAMES[type]) {
+                        gameState.currentInteractTarget = type;
+                        promptText.innerText = PORTAL_NAMES[type];
+                        if(!gameState.isMobile) prompt.classList.remove('hide'); 
+                        else {
+                            btnInteract.style.display = 'flex';
+                            btnInteract.innerText = type === 12 ? '💻' : (type === 18 ? '🐷' : '🚪');
+                        }
+                        crosshair.classList.add('crosshair-active');
+                    } else {
+                        prompt.classList.add('hide'); btnInteract.style.display = 'none'; crosshair.classList.remove('crosshair-active');
+                    }
+                } else {
+                    prompt.classList.add('hide'); btnInteract.style.display = 'none'; crosshair.classList.remove('crosshair-active');
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+        // ==========================================
+        // LOGICA EXCHANGE LOCALE MINIGAME
+        // ==========================================
+        let orderBook = { back: { 2.02: 150, 2.00: 300, 1.98: 500 }, lay: { 2.04: 200, 2.06: 400, 2.08: 350 } };
+
+        function openExchange() {
+            gameState.inExchange = true;
+            if(!gameState.isMobile) desktopControls.unlock();
+            document.getElementById('exchange-ui').classList.remove('hide');
+            renderOrderBook(); renderMyBets(); updateBetCalculator();
+        }
+
+        document.getElementById('close-exchange').addEventListener('click', () => { 
+            document.getElementById('exchange-ui').classList.add('hide'); 
+            gameState.inExchange = false; 
+        });
+
+        setInterval(() => {
+            if(gameState.inExchange) {
+                const bKeys = Object.keys(orderBook.back), lKeys = Object.keys(orderBook.lay);
+                let rndB = bKeys[Math.floor(Math.random() * bKeys.length)]; let rndL = lKeys[Math.floor(Math.random() * lKeys.length)];
+                orderBook.back[rndB] = Math.max(10, orderBook.back[rndB] + (Math.random() > 0.5 ? 25 : -25));
+                orderBook.lay[rndL] = Math.max(10, orderBook.lay[rndL] + (Math.random() > 0.5 ? 25 : -25));
+                renderOrderBook();
+            }
+        }, 1500);
+
+        function renderOrderBook() {
+            const container = document.getElementById('order-book-container'); container.innerHTML = '';
+            const backP = Object.keys(orderBook.back).sort((a, b) => b - a); const layP = Object.keys(orderBook.lay).sort((a, b) => a - b);
+
+            for (let i = 0; i < 3; i++) {
+                container.innerHTML += `
+                    <div class="flex items-center justify-center text-center py-1 group">
+                        <div class="flex-1 text-right pr-3 text-slate-400 text-[10px] hidden sm:block font-bold">In Coda</div>
+                        <div class="w-24 md:w-28 mx-1 cursor-pointer transition transform active:scale-95 shadow-sm rounded-xl border-b-2 border-transparent hover:border-blue-300 ${i===0 ? 'bg-back' : 'bg-back-light'}" onclick="populateBetSlip('back', ${backP[i]})">
+                            <div class="py-2"><div class="font-black text-xl md:text-2xl leading-none">${parseFloat(backP[i]).toFixed(2)}</div><div class="text-[10px] md:text-xs mt-1 font-bold opacity-90">€${orderBook.back[backP[i]]}</div></div>
+                        </div>
+                        <div class="w-24 md:w-28 mx-1 cursor-pointer transition transform active:scale-95 shadow-sm rounded-xl border-b-2 border-transparent hover:border-pink-300 ${i===0 ? 'bg-lay' : 'bg-lay-light'}" onclick="populateBetSlip('lay', ${layP[i]})">
+                            <div class="py-2"><div class="font-black text-xl md:text-2xl leading-none">${parseFloat(layP[i]).toFixed(2)}</div><div class="text-[10px] md:text-xs mt-1 font-bold opacity-90">€${orderBook.lay[layP[i]]}</div></div>
+                        </div>
+                        <div class="flex-1 text-left pl-3 text-slate-400 text-[10px] hidden sm:block font-bold">In Coda</div>
+                    </div>`;
+            }
+        }
+
+        window.selectType = function(type) {
+            gameState.betTypeSelected = type; const btn = document.getElementById('place-bet-btn');
+            const bBtn = document.getElementById('btn-tab-back'), lBtn = document.getElementById('btn-tab-lay');
+            bBtn.className = lBtn.className = "flex-1 py-3 rounded-xl font-black text-sm text-slate-400 bg-slate-100";
+
+            if (type === 'back') {
+                bBtn.className = "flex-1 py-3 rounded-xl font-black text-sm text-white bg-blue-600";
+                btn.className = "w-full bg-blue-600 text-white py-4 rounded-xl font-black text-base uppercase shadow-md active:scale-95";
+                btn.innerHTML = "Piazza Ordine PUNTA"; btn.disabled = false;
+            } else {
+                lBtn.className = "flex-1 py-3 rounded-xl font-black text-sm text-white bg-pink-500";
+                btn.className = "w-full bg-pink-500 text-white py-4 rounded-xl font-black text-base uppercase shadow-md active:scale-95";
+                btn.innerHTML = "Piazza Ordine BANCA"; btn.disabled = false;
+            }
+            updateBetCalculator(); vibrate(10);
+        };
+
+        window.populateBetSlip = function(type, odds) { window.selectType(type); document.getElementById('input-odds').value = odds.toFixed(2); updateBetCalculator(); };
+        document.getElementById('input-odds').addEventListener('input', updateBetCalculator); document.getElementById('input-stake').addEventListener('input', updateBetCalculator);
+
+        function updateBetCalculator() {
+            if (!gameState.betTypeSelected) return;
+            const odds = parseFloat(document.getElementById('input-odds').value) || 0; const stake = parseFloat(document.getElementById('input-stake').value) || 0;
+            let profit = gameState.betTypeSelected === 'back' ? (stake * odds) - stake : stake;
+            let liability = gameState.betTypeSelected === 'back' ? stake : (stake * odds) - stake;
+            document.getElementById('calc-profit').innerText = profit.toFixed(2); document.getElementById('calc-liability').innerText = liability.toFixed(2);
+        }
+
+        document.getElementById('place-bet-btn').addEventListener('click', () => {
+            const t = gameState.betTypeSelected; const o = parseFloat(document.getElementById('input-odds').value); const s = parseFloat(document.getElementById('input-stake').value);
+            let l = t === 'back' ? s : (s * o) - s;
+            if (l > gameState.balance) { alert("⚠️ Saldo insufficiente!"); return; }
+            gameState.balance -= l; document.getElementById('player-balance').innerText = gameState.balance.toFixed(2); vibrate([30, 60, 30]);
+            gameState.myBets.push({ id: Date.now(), type: t, odds: o, stake: s, liability: l, potentialProfit: t === 'back' ? (s*o)-s : s });
+            alert("Scommessa Locale Abbinata! Usa il fischio d'inizio per vedere il risultato.");
+        });
+
+        document.getElementById('simulate-match-btn').addEventListener('click', () => {
+            if (gameState.myBets.length === 0) { alert("Devi piazzare almeno una scommessa!"); return; }
+            gameState.inExchange = false; document.getElementById('exchange-ui').classList.add('hide');
+            const redWins = Math.random() > 0.5; let pnl = 0;
+            gameState.myBets.forEach(b => {
+                if (redWins) { if (b.type === 'back') { pnl += b.potentialProfit; gameState.balance += b.potentialProfit + b.liability; } else pnl -= b.liability; } 
+                else { if (b.type === 'back') pnl -= b.liability; else { pnl += b.potentialProfit; gameState.balance += b.potentialProfit + b.liability; } }
+            });
+            showResult(redWins, pnl);
+        });
+
+        function showResult(redWins, pnl) {
+            document.getElementById('match-result-ui').classList.remove('hide');
+            const winDiv = document.getElementById('result-winner');
+            if (redWins) { winDiv.innerHTML = `<span class="text-6xl mb-2 drop-shadow-md">⚽</span> Rossa Vince`; winDiv.className = "text-2xl font-black my-6 py-8 rounded-3xl shadow-inner text-white flex flex-col items-center bg-gradient-to-br from-red-500 to-red-600"; } 
+            else { winDiv.innerHTML = `<span class="text-6xl mb-2 drop-shadow-md">🛡️</span> Rossa Perde`; winDiv.className = "text-2xl font-bold my-6 py-8 rounded-3xl shadow-inner text-white flex flex-col items-center bg-gradient-to-br from-slate-500 to-slate-700"; }
+            document.getElementById('result-new-balance').innerText = `€${gameState.balance.toFixed(2)}`;
+            document.getElementById('player-balance').innerText = gameState.balance.toFixed(2);
+            gameState.myBets = []; vibrate([100, 50, 100]); 
+        }
+
+        document.getElementById('back-to-build-btn').addEventListener('click', () => {
+            document.getElementById('match-result-ui').classList.add('hide');
+            if(!gameState.isMobile) desktopControls.lock();
+        });
+
+        document.addEventListener('contextmenu', e => e.preventDefault());
+    </script>
+</body>
+</html>

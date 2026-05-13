@@ -247,7 +247,7 @@
                     
                     <div class="absolute bottom-4 flex flex-col items-center gap-2 w-[90%] z-20">
                         <label for="face-upload" class="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-black py-3 px-4 rounded-xl shadow-[0_5px_15px_rgba(244,63,94,0.4)] cursor-pointer transform hover:scale-105 active:scale-95 transition-all text-center flex items-center justify-center gap-2 text-sm md:text-base border-2 border-white/50">
-                            <span>📸 USA LA TUA FOTO!</span>
+                            <span>📸 FOTO SULLA MAGLIA!</span>
                         </label>
                         <input type="file" id="face-upload" accept="image/*" class="hidden">
                         <button id="remove-face-btn" class="hidden text-xs font-black text-red-500 bg-white/90 px-4 py-1.5 rounded-full shadow-sm hover:bg-white transition-colors uppercase tracking-wider">✖ Rimuovi Foto</button>
@@ -413,7 +413,7 @@
             inInstructions: false, hasSeenInstructions: false,
             myBets: [], spectators: 0, tokens: 0, currentInteractTarget: null,
             isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window),
-            avatar: { skin: '#ffcc99', hair: '#4a2c11', shirt: '#F44336', shorts: '#1976D2', socks: '#FFFFFF', shoes: '#111111', faceTex: null }
+            avatar: { skin: '#ffcc99', hair: '#4a2c11', shirt: '#F44336', shorts: '#1976D2', socks: '#FFFFFF', shoes: '#111111', shirtTex: null, shirtTexDataUrl: null }
         };
 
         const PORTAL_LINKS = { 14: "https://zero-to-hero-academy-betting-exchan.vercel.app/", 15: "https://subbuteo.vercel.app/", 16: "https://demo-betting-exchange.vercel.app/?lang=en", 17: "https://penalties-zero-to-hero-academy.vercel.app/", 18: "https://wheel-of-fortune-zero-to-hero-acade.vercel.app/" };
@@ -520,7 +520,10 @@
                     const size = Math.min(img.width, img.height); const startX = (img.width - size) / 2; const startY = (img.height - size) / 2;
                     ctx.drawImage(img, startX, startY, size, size, 0, 0, 128, 128);
                     
-                    gameState.avatar.faceTex = new THREE.CanvasTexture(canvas); gameState.avatar.faceTex.colorSpace = THREE.SRGBColorSpace;
+                    gameState.avatar.shirtTex = new THREE.CanvasTexture(canvas); 
+                    gameState.avatar.shirtTex.colorSpace = THREE.SRGBColorSpace;
+                    gameState.avatar.shirtTexDataUrl = canvas.toDataURL(); // Salva per l'interfaccia 2D
+                    
                     updateAvatarPreview(); initAudio(); playSound('magic'); vibrate([50, 50, 100]);
                     document.getElementById('remove-face-btn').classList.remove('hidden'); throwConfetti('avatar-creator-ui', 15);
                 }
@@ -530,7 +533,9 @@
         });
 
         document.getElementById('remove-face-btn').addEventListener('click', () => {
-            gameState.avatar.faceTex = null; updateAvatarPreview();
+            gameState.avatar.shirtTex = null; 
+            gameState.avatar.shirtTexDataUrl = null;
+            updateAvatarPreview();
             document.getElementById('remove-face-btn').classList.add('hidden'); document.getElementById('face-upload').value = '';
             initAudio(); playSound('pop');
         });
@@ -559,30 +564,51 @@
                 socks: new THREE.MeshLambertMaterial({color: c.socks}), shoes: new THREE.MeshLambertMaterial({color: c.shoes}),
                 black: new THREE.MeshBasicMaterial({color: 0x111111})
             };
-            const addBox = (w,h,d, x,y,z, matName) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mats[matName]); mesh.position.set(x,y,z); avatarPreviewGroup.add(mesh); };
+            const addBox = (w,h,d, x,y,z, matInfo) => { 
+                const mat = typeof matInfo === 'string' ? mats[matInfo] : matInfo;
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); 
+                mesh.position.set(x,y,z); 
+                avatarPreviewGroup.add(mesh); 
+            };
 
-            if(c.faceTex) {
-                const faceMat = new THREE.MeshLambertMaterial({color: 0xffffff, map: c.faceTex});
-                const headMats = [mats.skin, mats.skin, mats.skin, mats.skin, faceMat, mats.skin];
-                const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), headMats);
-                head.position.set(0, 2.8, 0); avatarPreviewGroup.add(head);
-            } else {
-                addBox(0.8, 0.8, 0.8, 0, 2.8, 0, 'skin');
-                addBox(0.1, 0.1, 0.1, -0.2, 2.8, 0.41, 'black'); addBox(0.1, 0.1, 0.1, 0.2, 2.8, 0.41, 'black');
-            }
+            // Testa standard con occhi
+            addBox(0.8, 0.8, 0.8, 0, 2.8, 0, 'skin');
+            addBox(0.1, 0.1, 0.1, -0.2, 2.8, 0.41, 'black'); addBox(0.1, 0.1, 0.1, 0.2, 2.8, 0.41, 'black');
 
+            // Capelli
             addBox(0.84, 0.2, 0.84, 0, 3.1, 0, 'hair'); addBox(0.84, 0.6, 0.2, 0, 2.8, -0.35, 'hair');
             addBox(0.2, 0.6, 0.84, -0.35, 2.8, 0, 'hair'); addBox(0.2, 0.6, 0.84, 0.35, 2.8, 0, 'hair'); 
             
-            addBox(0.8, 1.2, 0.4, 0, 1.8, 0, 'shirt');
+            // Maglietta con Logo Opzionale (la faccia 4 è quella frontale)
+            let shirtMaterial = mats.shirt;
+            if (c.shirtTex) {
+                const logoMat = new THREE.MeshLambertMaterial({color: 0xffffff, map: c.shirtTex});
+                shirtMaterial = [mats.shirt, mats.shirt, mats.shirt, mats.shirt, logoMat, mats.shirt];
+            }
+            addBox(0.8, 1.2, 0.4, 0, 1.8, 0, shirtMaterial);
+            
+            // Arti
             addBox(0.4, 0.6, 0.4, -0.6, 2.1, 0, 'shirt'); addBox(0.4, 0.6, 0.4, -0.6, 1.5, 0, 'skin');
             addBox(0.4, 0.6, 0.4, 0.6, 2.1, 0, 'shirt'); addBox(0.4, 0.6, 0.4, 0.6, 1.5, 0, 'skin');
             addBox(0.4, 0.4, 0.4, -0.2, 1.0, 0, 'shorts'); addBox(0.4, 0.3, 0.4, -0.2, 0.65, 0, 'skin'); addBox(0.4, 0.3, 0.4, -0.2, 0.35, 0, 'socks'); addBox(0.4, 0.2, 0.5, -0.2, 0.1, 0.05, 'shoes');
             addBox(0.4, 0.4, 0.4, 0.2, 1.0, 0, 'shorts'); addBox(0.4, 0.3, 0.4, 0.2, 0.65, 0, 'skin'); addBox(0.4, 0.3, 0.4, 0.2, 0.35, 0, 'socks'); addBox(0.4, 0.2, 0.5, 0.2, 0.1, 0.05, 'shoes');
             
+            // Aggiorna l'icona nel profilo 2D
             ['hair','skin','armL','armR','shirt','shortsL','shortsR','skinL','skinR','socksL','socksR','shoesL','shoesR'].forEach(p => {
                 const map = {hair:c.hair, skin:c.skin, armL:c.shirt, armR:c.shirt, shirt:c.shirt, shortsL:c.shorts, shortsR:c.shorts, skinL:c.skin, skinR:c.skin, socksL:c.socks, socksR:c.socks, shoesL:c.shoes, shoesR:c.shoes};
-                const el = document.getElementById('menu-av-'+p); if(el) el.style.backgroundColor = map[p];
+                const el = document.getElementById('menu-av-'+p); 
+                if(el) {
+                    el.style.backgroundColor = map[p];
+                    if (p === 'shirt') {
+                        if (c.shirtTexDataUrl) {
+                            el.style.backgroundImage = `url(${c.shirtTexDataUrl})`;
+                            el.style.backgroundSize = 'cover';
+                            el.style.backgroundPosition = 'center';
+                        } else {
+                            el.style.backgroundImage = 'none';
+                        }
+                    }
+                }
             });
         }
         updateAvatarPreview();
